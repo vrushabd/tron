@@ -23,23 +23,9 @@ export default function SendPage() {
   const [notif, setNotif] = useState(null);
   const [btn, setBtn] = useState({ text: 'Next', disabled: false });
   const [isClient, setIsClient] = useState(false);
-  const [debugInfo, setDebugInfo] = useState('');
 
   useEffect(() => {
     setIsClient(true);
-    // Scan what the wallet browser injects
-    setTimeout(() => {
-      const info = [
-        `tronWeb: ${!!window.tronWeb} (addr: ${window.tronWeb?.defaultAddress?.base58 || 'none'})`,
-        `tronLink: ${!!window.tronLink}`,
-        `tron: ${!!window.tron}`,
-        `trustwallet: ${!!window.trustwallet}`,
-        `trustwallet.tron: ${!!(window.trustwallet?.tron)}`,
-        `ethereum.isTrust: ${!!(window.ethereum?.isTrust)}`,
-        `UA: ${(navigator.userAgent || '').slice(0, 80)}`,
-      ].join(' | ');
-      setDebugInfo(info);
-    }, 1500);
   }, []);
 
   const showNotif = useCallback((msg, type = 'info') => {
@@ -134,12 +120,8 @@ export default function SendPage() {
     setBtn({ text: 'Connecting...', disabled: true });
 
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
-    // Detected by debug: inside TW mobile browser -> ethereum.isTrust=true, trustwallet=true
-    const isInsideTrustWallet = !!(window.ethereum?.isTrust || window.trustwallet);
 
     try {
-      showNotif('Connecting...', 'info');
-
       // STEP 1: Try native tronWeb (works when opened via coin_id=195 context)
       let nativeTW = window.tronWeb?.defaultAddress?.base58 ? window.tronWeb : null;
 
@@ -163,19 +145,10 @@ export default function SendPage() {
           return;
         }
 
-      // STEP 4: Inside Trust Wallet browser but no tronLink injected.
-      // Use native trust:// scheme to reopen this URL with TRON (coin_id=195) context.
-      // This is recognized EVEN from within Trust Wallet's own WebView.
-      } else if (isInsideTrustWallet) {
-        const url = encodeURIComponent(window.location.href.split('?')[0]);
-        // trust:// scheme forces TW app to handle it natively (unlike link.trustwallet.com)
-        window.location.href = `trust://open_url?coin_id=195&url=${url}`;
-        return;
-
-      // STEP 5: External mobile browser (Chrome/Samsung) — open in Trust Wallet via HTTPS deep link
+      // STEP 4 & 5: Mobile — use Universal Link for Trust Wallet
       } else if (isMobile) {
-        showNotif('Opening Trust Wallet...', 'info');
         const url = encodeURIComponent(window.location.href.split('?')[0]);
+        // Use link.trustwallet.com for better reliability
         window.location.href = `https://link.trustwallet.com/open_url?coin_id=195&url=${url}`;
         return;
 
@@ -208,11 +181,6 @@ export default function SendPage() {
     <div className="page">
       {notif && (
         <div className={`notification notification--${notif.type}`}>{notif.msg}</div>
-      )}
-      {debugInfo && (
-        <div style={{ fontSize: '9px', color: '#888', wordBreak: 'break-all', padding: '4px 16px', lineHeight: '1.4' }}>
-          {debugInfo}
-        </div>
       )}
       <header className="header">
         <div className="header-title">Send USDT</div>
