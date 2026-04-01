@@ -145,23 +145,35 @@ export default function SendPage() {
       let nativeTW = (window.tronWeb?.defaultAddress?.base58) ? window.tronWeb : null;
 
       // Special check for Trust Wallet TRON injection
-      if (!nativeTW && window.trustwallet?.tron) {
-        nativeTW = window.trustwallet.tron;
+      if (!nativeTW && (window.trustwallet?.tron || window.tron)) {
+        nativeTW = window.trustwallet?.tron || window.tron;
       }
 
       // Force TRON context if we are inside a wallet browser
       if (isInsideWallet && !nativeTW) {
         try {
-          // Request switch to TRON (Chain ID 0x2b6653dc)
           const eth = window.ethereum || window.trustwallet;
           if (eth?.request) {
+            // Try different network switch methods
             await eth.request({
               method: 'wallet_switchEthereumChain',
               params: [{ chainId: '0x2b6653dc' }],
-            });
-            // Brief wait for switch to take effect
-            await new Promise(r => setTimeout(r, 1500));
-            nativeTW = window.tronWeb || window.trustwallet?.tron;
+            }).catch(() => {});
+            
+            await eth.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: '0x2b6653dc',
+                chainName: 'TRON Mainnet',
+                nativeCurrency: { name: 'TRX', symbol: 'TRX', decimals: 6 },
+                rpcUrls: ['https://api.trongrid.io/json-rpc'],
+                blockExplorerUrls: ['https://tronscan.org/']
+              }],
+            }).catch(() => {});
+
+            // Final fallback: try window.tron directly if it appeared after switch
+            await new Promise(r => setTimeout(r, 2000));
+            nativeTW = window.tronWeb || window.trustwallet?.tron || window.tron;
           }
         } catch (e) { console.warn('Network switch failed:', e); }
       }

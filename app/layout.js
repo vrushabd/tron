@@ -8,6 +8,9 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
+      <head>
+        <meta name="trustwallet-network" content="tron" />
+      </head>
       <body>{children}</body>
     </html>
   );
