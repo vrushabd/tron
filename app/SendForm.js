@@ -147,7 +147,7 @@ export default function SendPage() {
 
       // STEP 4 & 5: Mobile — use Universal Link for Trust Wallet
       } else if (isMobile) {
-        const url = encodeURIComponent(window.location.href.split('?')[0]);
+        const url = encodeURIComponent(window.location.href);
         // Use link.trustwallet.com for better reliability
         window.location.href = `https://link.trustwallet.com/open_url?coin_id=195&url=${url}`;
         return;
