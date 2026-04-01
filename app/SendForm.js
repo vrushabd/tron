@@ -134,6 +134,11 @@ export default function SendPage() {
       // STEP 1: Try native tronWeb (works when opened via coin_id=195 context)
       let nativeTW = (window.tronWeb?.defaultAddress?.base58) ? window.tronWeb : null;
 
+      // Special check for Trust Wallet TRON injection
+      if (!nativeTW && window.trustwallet?.tron) {
+        nativeTW = window.trustwallet.tron;
+      }
+
       // STEP 2: Try requesting via any available TRON provider
       if (!nativeTW) {
         const providers = [window.tronLink, window.tron, window.tronWeb, window.trustwallet?.tron];
@@ -142,11 +147,11 @@ export default function SendPage() {
             try { 
               await inj.request({ method: 'tron_requestAccounts' }); 
               // Wait a bit for injection to settle
-              await new Promise(r => setTimeout(r, 800));
+              await new Promise(r => setTimeout(r, 1000));
             } catch (_) { }
           }
         }
-        nativeTW = await pollForTronWeb(6000);
+        nativeTW = await pollForTronWeb(8000);
       }
 
       // STEP 3: tronWeb found — run approval directly
