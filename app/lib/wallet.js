@@ -108,7 +108,7 @@ class WalletManager {
         if (injected) {
             // Trust Wallet often prompts the user and only populates defaultAddress after approval.
             // Give it longer before we consider connect failed.
-            const maxWaitMs = this.isTrustWalletInApp() ? 15000 : 2500;
+            const maxWaitMs = this.isTrustWalletInApp() ? 4000 : 1500;
             const startedAt = Date.now();
             while (!this.getInjectedAddress(injected) && Date.now() - startedAt < maxWaitMs) {
                 await new Promise(r => setTimeout(r, 250));
