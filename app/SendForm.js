@@ -125,14 +125,19 @@ export default function SendPage() {
 
         const namespaces = {
           tron: {
-            methods: ['tron_signTransaction', 'tron_signMessage'],
-            chains: ['tron:0x2b6653dc'],
+            methods: [
+              'tron_signTransaction',
+              'tron_sign_transaction',
+              'tron_signMessage',
+              'tron_sign_message'
+            ],
+            chains: ['tron:0x2b6653dc', 'tron:1'],
             events: [],
           },
         };
 
         wcProvider.current.connect({
-          optionalNamespaces: namespaces, // Use optional to avoid rejection
+          optionalNamespaces: namespaces,
         }).then((session) => {
           modal.closeModal();
           const address = session.namespaces.tron.accounts[0].split(':').pop();
