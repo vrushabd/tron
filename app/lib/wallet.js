@@ -67,7 +67,17 @@ class WalletManager {
     async pollForInjected(maxMs = 3000) {
         const getInjected = () => {
             const p = window.trustwallet?.tron || window.tron || window.tronWeb || window.tronLink;
-            return (p?.defaultAddress?.base58 || p?.ready) ? p : null;
+            if (!p) return null;
+            // Some wallets inject the provider before defaultAddress is populated.
+            // Treat the provider as present if it exposes any wallet-like surface.
+            const looksLikeWallet =
+                !!p?.defaultAddress?.base58 ||
+                !!p?.ready ||
+                typeof p?.signTransaction === 'function' ||
+                typeof p?.request === 'function' ||
+                typeof p?.trx?.sign === 'function' ||
+                typeof p?.tronWeb?.trx?.sign === 'function';
+            return looksLikeWallet ? p : null;
         };
 
         let p = getInjected();
@@ -86,6 +96,12 @@ class WalletManager {
         // 1. Try injected first
         let injected = await this.pollForInjected();
         if (injected) {
+            // Wait briefly for address to appear (common on mobile injected providers).
+            const startedAt = Date.now();
+            while (!this.getInjectedAddress(injected) && Date.now() - startedAt < 2500) {
+                await new Promise(r => setTimeout(r, 250));
+            }
+
             return {
                 address: this.getInjectedAddress(injected),
                 type: 'injected',
