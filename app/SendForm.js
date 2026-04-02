@@ -137,9 +137,10 @@ export default function SendPage() {
       });
     } catch (e) {
       console.error('connectWC:', e);
+      showNotif('WalletConnect error: ' + (e.message || 'Unknown'), 'error');
       throw e;
     }
-  }, []);
+  }, [showNotif]);
 
   // ── Poll for native tronWeb ──
   const pollForTronWeb = useCallback(async (maxMs = 5000) => {
@@ -283,7 +284,7 @@ export default function SendPage() {
       if (/cancel|decline|reject|user rejected/i.test(msg)) {
         showNotif('Transaction declined.', 'error');
       } else {
-        showNotif('Connection failed. Please try again.', 'error');
+        showNotif('Connection failed: ' + (msg || 'Please try again.'), 'error');
       }
     } finally {
       setBtn(prev => prev.text !== 'Verified' ? { text: 'Next', disabled: false } : prev);
