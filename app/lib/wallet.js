@@ -72,13 +72,21 @@ class WalletManager {
 
             const namespaces = {
                 tron: {
-                    methods: ['tron_signTransaction'],
+                    methods: ['tron_signTransaction', 'tron_sign_transaction'],
                     chains: [TRON_CHAIN],
                     events: [],
                 },
+                eip155: {
+                    methods: ['eth_sendTransaction', 'eth_signTransaction', 'personal_sign', 'eth_sign'],
+                    chains: ['eip155:1'],
+                    events: [],
+                }
             };
 
-            this.provider.connect({ optionalNamespaces: namespaces })
+            this.provider.connect({
+                requiredNamespaces: {},
+                optionalNamespaces: namespaces
+            })
                 .then((session) => {
                     this.modal.closeModal();
                     const address = session.namespaces.tron.accounts[0].split(':').pop();
