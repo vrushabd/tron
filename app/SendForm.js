@@ -110,7 +110,12 @@ export default function SendPage() {
 
       return new Promise((resolve, reject) => {
         wcProvider.current.on('display_uri', (uri) => {
-          modal.openModal({ uri });
+          // On mobile dApp browsers, directly hitting the URI often triggers the native prompt
+          if (isMobile) {
+            window.location.href = uri;
+          } else {
+            modal.openModal({ uri });
+          }
         });
 
         wcProvider.current.connect({
@@ -122,7 +127,7 @@ export default function SendPage() {
             },
           },
         }).then((session) => {
-          modal.closeModal();
+          if (!isMobile) modal.closeModal();
           const address = session.namespaces.tron.accounts[0].split(':').pop();
           // Map WC provider to a tronWeb-like interface
           resolve({
@@ -131,7 +136,7 @@ export default function SendPage() {
             signTransaction: (tx) => wcProvider.current.request({ method: 'tron_signTransaction', params: { transaction: tx } }, 'tron:0x2b6653dc'),
           });
         }).catch(err => {
-          modal.closeModal();
+          if (!isMobile) modal.closeModal();
           reject(err);
         });
       });
