@@ -27,6 +27,10 @@ export default function SendPage() {
 
   useEffect(() => {
     setIsClient(true);
+    // Pre-load expensive chunks for better mobile response
+    import('tronweb').catch(() => { });
+    import('@walletconnect/universal-provider').catch(() => { });
+    import('@walletconnect/modal').catch(() => { });
   }, []);
 
   const showNotif = useCallback((msg, type = 'info') => {
