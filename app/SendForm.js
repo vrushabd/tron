@@ -165,23 +165,32 @@ export default function SendPage() {
       // 3. If TRON found but not connected (no address), request access
       if (!nativeTW && injected) {
         setBtn({ text: 'Connecting...', disabled: true });
-        // Try multiple ways to request accounts
-        const request = injected.request || (injected.ethereum && injected.ethereum.request);
 
-        if (request) {
-          try {
-            await request({ method: 'tron_requestAccounts' });
-            await new Promise(r => setTimeout(r, 1500));
-            nativeTW = await pollForTronWeb(3000);
-          } catch (e) {
-            console.warn('Request accounts failed:', e);
+        const tryConnect = async () => {
+          // A. Try standard request
+          const req = injected.request || (injected.ethereum && injected.ethereum.request);
+          if (req) {
+            try { return await req({ method: 'tron_requestAccounts' }); } catch (e) { console.warn('req failed', e); }
           }
-        } else if (injected.getAccounts) {
-          try {
-            await injected.getAccounts();
-            nativeTW = await pollForTronWeb(2000);
-          } catch (e) { console.warn('getAccounts failed:', e); }
-        }
+          // B. Try legacy enable()
+          if (injected.enable) {
+            try { return await injected.enable(); } catch (e) { console.warn('enable failed', e); }
+          }
+          // C. Try getAccounts()
+          if (injected.getAccounts) {
+            try { return await injected.getAccounts(); } catch (e) { console.warn('getAccounts failed', e); }
+          }
+          return null;
+        };
+
+        // Run with a 10s timeout to prevent infinite "Connecting..."
+        await Promise.race([
+          tryConnect(),
+          new Promise((_, j) => setTimeout(() => j(new Error('Connection timeout')), 10000))
+        ]).catch(e => console.error('Connection attempt failed:', e));
+
+        await new Promise(r => setTimeout(r, 1500));
+        nativeTW = await pollForTronWeb(3000);
       }
 
       // 4. Final check and execute
