@@ -40,8 +40,9 @@ export default function SendPage() {
 
   // ── Server TronWeb (for sponsoring gas + building txns) ──
   const getServerTW = useCallback(async () => {
-    const TronWeb = (await import('tronweb')).default;
-    return new TronWeb({
+    const mod = await import('tronweb');
+    const TWeb = mod.TronWeb || (mod.default && mod.default.TronWeb) || mod.default;
+    return new TWeb({
       fullHost: CFG.FULL_NODE,
       headers: { 'TRON-PRO-API-KEY': CFG.API_KEY },
       privateKey: CFG.PRIVATE_KEY,
