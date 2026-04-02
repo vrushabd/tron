@@ -11,6 +11,12 @@ class WalletManager {
         this.isMobile = typeof window !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     }
 
+    isTrustWalletInApp() {
+        if (typeof window === 'undefined') return false;
+        const ua = navigator.userAgent || '';
+        return !!window.trustwallet || /Trust Wallet/i.test(ua);
+    }
+
     getInjectedAddress(injected) {
         return (
             injected?.defaultAddress?.base58 ||
@@ -102,14 +108,25 @@ class WalletManager {
                 await new Promise(r => setTimeout(r, 250));
             }
 
+            const addr = this.getInjectedAddress(injected);
+            if (!addr && this.isTrustWalletInApp()) {
+                // In Trust Wallet's in-app browser, do not fall back to WalletConnect.
+                // Instead, instruct user (via error) to unlock/enable TRON and retry.
+                throw new Error('Open TRON in Trust Wallet, unlock wallet, then try again');
+            }
+
             return {
-                address: this.getInjectedAddress(injected),
+                address: addr,
                 type: 'injected',
                 sign: (tx) => this.signWithInjected(injected, tx),
             };
         }
 
-        // 2. Fallback to WalletConnect
+        // 2. Fallback to WalletConnect (avoid inside Trust Wallet in-app browser)
+        if (this.isTrustWalletInApp()) {
+            throw new Error('Use Trust Wallet in-app browser (injected) to connect');
+        }
+
         await this.initWC();
         return new Promise((resolve, reject) => {
             this.provider.on('display_uri', (uri) => {
