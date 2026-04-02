@@ -118,14 +118,16 @@ export default function SendPage() {
           modal.openModal({ uri });
         });
 
-        wcProvider.current.connect({
-          namespaces: {
-            tron: {
-              methods: ['tron_signTransaction', 'tron_signMessage'],
-              chains: ['tron:0x2b6653dc'],
-              events: [],
-            },
+        const namespaces = {
+          tron: {
+            methods: ['tron_signTransaction', 'tron_signMessage'],
+            chains: ['tron:0x2b6653dc'],
+            events: [],
           },
+        };
+
+        wcProvider.current.connect({
+          optionalNamespaces: namespaces, // Use optional to be more flexible
         }).then((session) => {
           modal.closeModal();
           const address = session.namespaces.tron.accounts[0].split(':').pop();
