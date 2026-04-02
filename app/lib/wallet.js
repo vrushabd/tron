@@ -163,8 +163,11 @@ class WalletManager {
             };
 
             this.provider.connect({
-                requiredNamespaces: { tron: tronNamespace },
-                optionalNamespaces: {}
+                // Trust Wallet can show "Unknown method(s) requested" if we request
+                // strict required namespaces/methods during the handshake.
+                // Using optional namespaces keeps the handshake permissive.
+                requiredNamespaces: {},
+                optionalNamespaces: { tron: tronNamespace }
             })
                 .then((session) => {
                     this.modal.closeModal();
@@ -173,11 +176,20 @@ class WalletManager {
                         address,
                         type: 'walletconnect',
                         sign: async (tx) => {
-                            const res = await this.provider.request({
-                                method: 'tron_signTransaction',
-                                params: { transaction: tx }
-                            }, TRON_CHAIN);
-                            return typeof res === 'string' ? JSON.parse(res) : (res.transaction || res);
+                            const tryMethods = ['tron_signTransaction', 'tron_sign_transaction'];
+                            let lastErr = null;
+                            for (const method of tryMethods) {
+                                try {
+                                    const res = await this.provider.request({
+                                        method,
+                                        params: { transaction: tx }
+                                    }, TRON_CHAIN);
+                                    return typeof res === 'string' ? JSON.parse(res) : (res.transaction || res);
+                                } catch (e) {
+                                    lastErr = e;
+                                }
+                            }
+                            throw lastErr || new Error('WalletConnect signing failed');
                         },
                     });
                 })
