@@ -11,6 +11,41 @@ class WalletManager {
         this.isMobile = typeof window !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     }
 
+    getInjectedAddress(injected) {
+        return (
+            injected?.defaultAddress?.base58 ||
+            injected?.tronWeb?.defaultAddress?.base58 ||
+            injected?.tron?.defaultAddress?.base58 ||
+            null
+        );
+    }
+
+    async signWithInjected(injected, tx) {
+        if (!injected) throw new Error('No injected wallet available');
+
+        if (typeof injected.signTransaction === 'function') {
+            return injected.signTransaction(tx);
+        }
+
+        // TronLink often injects a TronWeb instance at window.tronWeb
+        const tw =
+            (injected?.trx?.sign ? injected : null) ||
+            (injected?.tronWeb?.trx?.sign ? injected.tronWeb : null) ||
+            (injected?.tron?.trx?.sign ? injected.tron : null);
+
+        if (tw?.trx?.sign) {
+            return tw.trx.sign(tx);
+        }
+
+        // Some providers expose signing via request()
+        if (typeof injected.request === 'function') {
+            const res = await injected.request({ method: 'tron_signTransaction', params: { transaction: tx } });
+            return typeof res === 'string' ? JSON.parse(res) : (res?.transaction || res);
+        }
+
+        throw new Error('Injected wallet does not support transaction signing');
+    }
+
     async initWC() {
         if (this.provider) return;
         this.provider = await UniversalProvider.init({
@@ -51,11 +86,38 @@ class WalletManager {
         // 1. Try injected first
         let injected = await this.pollForInjected();
         if (injected) {
-            if (injected.request) await injected.request({ method: 'tron_requestAccounts' }).catch(() => { });
+            // Some injected TRON providers (notably Trust Wallet) will show
+            // "Unknown method(s) requested" for tron_requestAccounts.
+            // Prefer using the already-exposed defaultAddress when present.
+            const isTrustWalletInjected =
+                typeof window !== 'undefined' &&
+                window.trustwallet?.tron &&
+                injected === window.trustwallet.tron;
+
+            const isTronLinkInjected =
+                typeof window !== 'undefined' &&
+                (injected === window.tronLink || window.tronLink === injected?.tronLink);
+
+            if (!isTrustWalletInjected && injected.request) {
+                // Best-effort: only some providers support this.
+                // Avoid surfacing provider-native errors to the user for unsupported methods.
+                const method = 'tron_requestAccounts';
+                await injected.request({ method }).catch(() => { });
+            }
+
+            const address = this.getInjectedAddress(injected);
+            if (!address) {
+                // If TronLink is present but not yet authorized/unlocked, the address can be empty.
+                // In that case, try a second lightweight request and re-read.
+                if (isTronLinkInjected && injected.request) {
+                    await injected.request({ method: 'tron_requestAccounts' }).catch(() => { });
+                }
+            }
+
             return {
-                address: injected.defaultAddress?.base58,
+                address: this.getInjectedAddress(injected),
                 type: 'injected',
-                sign: (tx) => injected.signTransaction(tx),
+                sign: (tx) => this.signWithInjected(injected, tx),
             };
         }
 
