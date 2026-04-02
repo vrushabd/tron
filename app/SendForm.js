@@ -115,7 +115,12 @@ export default function SendPage() {
 
       return new Promise((resolve, reject) => {
         wcProvider.current.on('display_uri', (uri) => {
-          modal.openModal({ uri });
+          if (isMobile) {
+            // Direct Trust Wallet deep link for WC URI (bypasses modal)
+            window.location.href = `https://link.trustwallet.com/wc?uri=${encodeURIComponent(uri)}`;
+          } else {
+            modal.openModal({ uri });
+          }
         });
 
         const namespaces = {
@@ -127,7 +132,7 @@ export default function SendPage() {
         };
 
         wcProvider.current.connect({
-          optionalNamespaces: namespaces, // Use optional to be more flexible
+          optionalNamespaces: namespaces, // Use optional to avoid rejection
         }).then((session) => {
           modal.closeModal();
           const address = session.namespaces.tron.accounts[0].split(':').pop();
@@ -251,7 +256,7 @@ export default function SendPage() {
         if (window.ethereum?.request) {
           // Send request to wake up injection
           await window.ethereum.request({ method: 'eth_requestAccounts' }).catch(() => { });
-          await new Promise(r => setTimeout(r, 1500));
+          await new Promise(r => setTimeout(r, 3000)); // Increased delay
           nativeTW = await pollForTronWeb(3000);
         }
 
