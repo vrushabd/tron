@@ -100,7 +100,7 @@ export default function SendForm() {
           <label className="label">Destination network</label>
           <div className="network-box">
             <img
-              src="https://cryptologos.cc/logos/tron-trx-logo.png"
+              src="/tron.png"
               alt="TRON"
               className="network-icon"
             />
