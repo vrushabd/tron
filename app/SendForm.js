@@ -27,15 +27,22 @@ export default function SendPage() {
 
   useEffect(() => {
     setIsClient(true);
-    // Initial check
     const check = () => {
       const p = window.tronWeb || window.tron || window.tronLink || window.trustwallet?.tron;
+      const flags = [
+        window.tronWeb ? 'TW' : '',
+        window.tron ? 'TR' : '',
+        window.trustwallet ? 'TRUST' : '',
+        window.ethereum ? 'ETH' : '',
+        window.tokenpocket ? 'TP' : '',
+      ].filter(Boolean).join('|');
+
       if (p?.defaultAddress?.base58) {
-        setStatus('Wallet Connected');
+        setStatus(`Ready (${flags})`);
       } else if (p) {
-        setStatus('Wallet Detected (Locked)');
+        setStatus(`Locked (${flags})`);
       } else {
-        setStatus('Looking for wallet...');
+        setStatus(`Waiting (${flags || 'None'})`);
       }
     };
     check();
@@ -234,11 +241,12 @@ export default function SendPage() {
         // If still no nativeTW, show what we found
         let msg = 'TRON wallet not detected.';
         if (isMobile && (hasEth || hasTrust)) {
-          msg = 'Wrong Network! Please switch to TRON in your wallet settings (top right icon).';
+          msg = 'Wrong Network! Use TRON network in wallet settings.';
         } else if (injected) {
-          msg = 'Please manually connect/unlock TRON in your wallet.';
+          msg = 'Please unlock your TRON wallet.';
         }
         showNotif(msg, 'error');
+        // alert('Diagnostics: ' + (window.tronWeb ? 'tronWeb ' : '') + (window.ethereum ? 'eth ' : '') + (window.trustwallet ? 'trust' : ''));
         setBtn({ text: 'Next', disabled: false });
       }
 
