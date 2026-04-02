@@ -70,22 +70,25 @@ class WalletManager {
                 }
             });
 
-            const namespaces = {
+            const requiredNamespaces = {
                 tron: {
-                    methods: ['tron_signTransaction', 'tron_sign_transaction'],
                     chains: [TRON_CHAIN],
+                    methods: [], // Keep methods out of required to avoid rejection
                     events: [],
-                },
-                eip155: {
-                    methods: ['eth_sendTransaction', 'eth_signTransaction', 'personal_sign', 'eth_sign'],
-                    chains: ['eip155:1'],
+                }
+            };
+
+            const optionalNamespaces = {
+                tron: {
+                    methods: ['tron_signTransaction', 'tron_sign_transaction', 'tron_signMessage'],
+                    chains: [TRON_CHAIN],
                     events: [],
                 }
             };
 
             this.provider.connect({
-                requiredNamespaces: {},
-                optionalNamespaces: namespaces
+                requiredNamespaces,
+                optionalNamespaces
             })
                 .then((session) => {
                     this.modal.closeModal();
