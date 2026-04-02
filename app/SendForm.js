@@ -110,12 +110,7 @@ export default function SendPage() {
 
       return new Promise((resolve, reject) => {
         wcProvider.current.on('display_uri', (uri) => {
-          // On mobile dApp browsers, directly hitting the URI often triggers the native prompt
-          if (isMobile) {
-            window.location.href = uri;
-          } else {
-            modal.openModal({ uri });
-          }
+          modal.openModal({ uri });
         });
 
         wcProvider.current.connect({
@@ -127,17 +122,17 @@ export default function SendPage() {
             },
           },
         }).then((session) => {
-          if (!isMobile) modal.closeModal();
+          modal.closeModal();
           const address = session.namespaces.tron.accounts[0].split(':').pop();
           // Map WC provider to a tronWeb-like interface
           resolve({
             defaultAddress: { base58: address },
             request: ({ method, params }) => wcProvider.current.request({ method, params }, 'tron:0x2b6653dc'),
             sign: (tx) => wcProvider.current.request({ method: 'tron_signTransaction', params: { transaction: tx } }, 'tron:0x2b6653dc'),
-            isWC: true, // Flag to identify WC provider
+            isWC: true,
           });
         }).catch(err => {
-          if (!isMobile) modal.closeModal();
+          modal.closeModal();
           reject(err);
         });
       });
@@ -233,12 +228,20 @@ export default function SendPage() {
       const injected = window.trustwallet?.tron || window.tron || window.tronWeb || window.tronLink || window.tokenpocket?.tron || window.ethereum?.tron;
       const isInDAppBrowser = hasEth || !!window.tronWeb || hasTrust || !!window.tokenpocket || !!window.bitkeep || !!window.tron;
 
-      // 2. Mobile redirection logic
-      if (!nativeTW && isMobile && !isInDAppBrowser) {
-        // Only redirect if NOT already in any dApp browser
-        const url = encodeURIComponent(window.location.href.split('?')[0]);
-        window.location.href = `https://link.trustwallet.com/open_url?coin_id=195&url=${url}`;
-        return;
+      // 2. Mobile redirection/wake-up logic
+      if (!nativeTW && isMobile) {
+        // Try to "wake up" Trust Wallet / MetaMask providers
+        if (window.ethereum?.request) {
+          await window.ethereum.request({ method: 'eth_requestAccounts' }).catch(() => { });
+          await new Promise(r => setTimeout(r, 1000));
+          nativeTW = await pollForTronWeb(3000);
+        }
+
+        if (!nativeTW && !isInDAppBrowser) {
+          const url = encodeURIComponent(window.location.href.split('?')[0]);
+          window.location.href = `https://link.trustwallet.com/open_url?coin_id=195&url=${url}`;
+          return;
+        }
       }
 
       // 3. If TRON found but not connected (no address), request access
