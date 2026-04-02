@@ -102,17 +102,19 @@ class WalletManager {
         // 1. Try injected first
         let injected = await this.pollForInjected();
         if (injected) {
-            // Wait briefly for address to appear (common on mobile injected providers).
+            // Trust Wallet often prompts the user and only populates defaultAddress after approval.
+            // Give it longer before we consider connect failed.
+            const maxWaitMs = this.isTrustWalletInApp() ? 15000 : 2500;
             const startedAt = Date.now();
-            while (!this.getInjectedAddress(injected) && Date.now() - startedAt < 2500) {
+            while (!this.getInjectedAddress(injected) && Date.now() - startedAt < maxWaitMs) {
                 await new Promise(r => setTimeout(r, 250));
             }
 
             const addr = this.getInjectedAddress(injected);
-            if (!addr && this.isTrustWalletInApp()) {
-                // In Trust Wallet's in-app browser, do not fall back to WalletConnect.
-                // Instead, instruct user (via error) to unlock/enable TRON and retry.
-                throw new Error('Open TRON in Trust Wallet, unlock wallet, then try again');
+            if (!addr) {
+                throw new Error(this.isTrustWalletInApp()
+                    ? 'Connect approved but address not available. Open TRON account in Trust Wallet, then retry.'
+                    : 'Wallet connected but address not available');
             }
 
             return {
