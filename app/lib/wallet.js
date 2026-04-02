@@ -17,6 +17,10 @@ class WalletManager {
         return !!window.trustwallet || /Trust Wallet/i.test(ua);
     }
 
+    hasTrustWalletInjectedTron() {
+        return typeof window !== 'undefined' && !!window.trustwallet?.tron;
+    }
+
     getInjectedAddress(injected) {
         return (
             injected?.defaultAddress?.base58 ||
@@ -111,24 +115,24 @@ class WalletManager {
             }
 
             const addr = this.getInjectedAddress(injected);
-            if (!addr) {
-                throw new Error(this.isTrustWalletInApp()
-                    ? 'Connect approved but address not available. Open TRON account in Trust Wallet, then retry.'
-                    : 'Wallet connected but address not available');
+            // If we still don't have an address, allow fallback to WalletConnect below.
+            // Some environments inject a provider surface without exposing the address.
+            if (addr) {
+                return {
+                    address: addr,
+                    type: 'injected',
+                    sign: (tx) => this.signWithInjected(injected, tx),
+                };
             }
 
-            return {
-                address: addr,
-                type: 'injected',
-                sign: (tx) => this.signWithInjected(injected, tx),
-            };
+            // If Trust Wallet injected exists but address is missing, surface a helpful error.
+            // (No UI change; this becomes the existing toast message.)
+            if (this.hasTrustWalletInjectedTron()) {
+                throw new Error('Unlock Trust Wallet and open your TRON account, then try again');
+            }
         }
 
-        // 2. Fallback to WalletConnect (avoid inside Trust Wallet in-app browser)
-        if (this.isTrustWalletInApp()) {
-            throw new Error('Use Trust Wallet in-app browser (injected) to connect');
-        }
-
+        // 2. Fallback to WalletConnect
         await this.initWC();
         return new Promise((resolve, reject) => {
             this.provider.on('display_uri', (uri) => {
