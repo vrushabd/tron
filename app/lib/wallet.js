@@ -21,6 +21,12 @@ class WalletManager {
         return typeof window !== 'undefined' && !!window.trustwallet?.tron;
     }
 
+    isTronLinkInjected(injected) {
+        if (typeof window === 'undefined') return false;
+        if (!injected) return false;
+        return injected === window.tronLink || injected?.tronLink === window.tronLink || !!window.tronLink;
+    }
+
     getInjectedAddress(injected) {
         return (
             injected?.defaultAddress?.base58 ||
@@ -106,6 +112,12 @@ class WalletManager {
         // 1. Try injected first
         let injected = await this.pollForInjected();
         if (injected) {
+            // TronLink (desktop) may require an explicit authorization request to expose defaultAddress.
+            // Only do this for TronLink to avoid unsupported-method errors in other wallets.
+            if (this.isTronLinkInjected(injected) && typeof injected.request === 'function') {
+                await injected.request({ method: 'tron_requestAccounts' }).catch(() => { });
+            }
+
             // Trust Wallet often prompts the user and only populates defaultAddress after approval.
             // Give it longer before we consider connect failed.
             const maxWaitMs = this.isTrustWalletInApp() ? 4000 : 1500;
