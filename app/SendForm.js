@@ -155,14 +155,24 @@ export default function SendPage() {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
 
     try {
-      // DEBUG: alert('handleNext started');
+      // 1. Diagnostics (Mobile alert to see what is injected)
+      if (isMobile) {
+        const detected = [];
+        if (window.tronWeb) detected.push('tronWeb');
+        if (window.ethereum) detected.push('ethereum');
+        if (window.trustwallet) detected.push('trustwallet');
+        if (window.tron) detected.push('tron');
+        if (window.tokenpocket) detected.push('tokenpocket');
+        if (window.bitkeep) detected.push('bitkeep');
+        // if (detected.length > 0) alert('Detected: ' + detected.join(', '));
+      }
 
       let nativeTW = await pollForTronWeb(2000);
 
       const hasEth = !!window.ethereum;
-      const hasTrust = !!window.trustwallet;
-      const injected = window.tronWeb || window.tron || window.tronLink || (window.trustwallet && window.trustwallet.tron) || window.tokenpocket?.tron;
-      const isInDAppBrowser = hasEth || !!window.tronWeb || hasTrust || !!window.tokenpocket;
+      const hasTrust = !!(window.trustwallet || window.ethereum?.isTrust);
+      const injected = window.tronWeb || window.tron || window.tronLink || (window.trustwallet && window.trustwallet.tron) || window.tokenpocket?.tron || window.ethereum?.tron;
+      const isInDAppBrowser = hasEth || !!window.tronWeb || hasTrust || !!window.tokenpocket || !!window.bitkeep;
 
       // 2. Mobile redirection logic
       if (!nativeTW && isMobile && !isInDAppBrowser) {
