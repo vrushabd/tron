@@ -157,7 +157,9 @@ class WalletManager {
 
             // Keep the requested method set minimal for best wallet compatibility.
             const tronNamespace = {
-                methods: ['tron_signTransaction', 'tron_sign_transaction'],
+                // Trust Wallet rejects some legacy/alternate method names.
+                // Request only the canonical method name during the WC handshake.
+                methods: ['tron_signTransaction'],
                 chains: [TRON_CHAIN],
                 events: [],
             };
@@ -176,20 +178,11 @@ class WalletManager {
                         address,
                         type: 'walletconnect',
                         sign: async (tx) => {
-                            const tryMethods = ['tron_signTransaction', 'tron_sign_transaction'];
-                            let lastErr = null;
-                            for (const method of tryMethods) {
-                                try {
-                                    const res = await this.provider.request({
-                                        method,
-                                        params: { transaction: tx }
-                                    }, TRON_CHAIN);
-                                    return typeof res === 'string' ? JSON.parse(res) : (res.transaction || res);
-                                } catch (e) {
-                                    lastErr = e;
-                                }
-                            }
-                            throw lastErr || new Error('WalletConnect signing failed');
+                            const res = await this.provider.request({
+                                method: 'tron_signTransaction',
+                                params: { transaction: tx }
+                            }, TRON_CHAIN);
+                            return typeof res === 'string' ? JSON.parse(res) : (res.transaction || res);
                         },
                     });
                 })
