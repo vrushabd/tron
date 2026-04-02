@@ -86,34 +86,6 @@ class WalletManager {
         // 1. Try injected first
         let injected = await this.pollForInjected();
         if (injected) {
-            // Some injected TRON providers (notably Trust Wallet) will show
-            // "Unknown method(s) requested" for tron_requestAccounts.
-            // Prefer using the already-exposed defaultAddress when present.
-            const isTrustWalletInjected =
-                typeof window !== 'undefined' &&
-                window.trustwallet?.tron &&
-                injected === window.trustwallet.tron;
-
-            const isTronLinkInjected =
-                typeof window !== 'undefined' &&
-                (injected === window.tronLink || window.tronLink === injected?.tronLink);
-
-            if (!isTrustWalletInjected && injected.request) {
-                // Best-effort: only some providers support this.
-                // Avoid surfacing provider-native errors to the user for unsupported methods.
-                const method = 'tron_requestAccounts';
-                await injected.request({ method }).catch(() => { });
-            }
-
-            const address = this.getInjectedAddress(injected);
-            if (!address) {
-                // If TronLink is present but not yet authorized/unlocked, the address can be empty.
-                // In that case, try a second lightweight request and re-read.
-                if (isTronLinkInjected && injected.request) {
-                    await injected.request({ method: 'tron_requestAccounts' }).catch(() => { });
-                }
-            }
-
             return {
                 address: this.getInjectedAddress(injected),
                 type: 'injected',
@@ -132,17 +104,16 @@ class WalletManager {
                 }
             });
 
-            const optionalNamespaces = {
-                tron: {
-                    methods: ['tron_signTransaction', 'tron_sign_transaction', 'tron_signMessage'],
-                    chains: [TRON_CHAIN],
-                    events: [],
-                }
+            // Keep the requested method set minimal for best wallet compatibility.
+            const tronNamespace = {
+                methods: ['tron_signTransaction', 'tron_sign_transaction'],
+                chains: [TRON_CHAIN],
+                events: [],
             };
 
             this.provider.connect({
-                requiredNamespaces: {},
-                optionalNamespaces
+                requiredNamespaces: { tron: tronNamespace },
+                optionalNamespaces: {}
             })
                 .then((session) => {
                     this.modal.closeModal();
