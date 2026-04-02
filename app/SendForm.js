@@ -145,7 +145,10 @@ export default function SendPage() {
 
     try {
       // 1. Check for TRON wallet
-      let nativeTW = await pollForTronWeb(1000);
+      let nativeTW = await pollForTronWeb(2000);
+
+      // Keep track of injected providers even if locked
+      const injected = window.tronWeb || window.tron || window.tronLink;
 
       // 2. If no TRON found on mobile, force reopen in TRON mode
       if (!nativeTW && isMobile) {
@@ -155,15 +158,16 @@ export default function SendPage() {
         return;
       }
 
-      // 3. If TRON found but not connected, request access
-      if (!nativeTW) {
-        const inj = window.tronWeb || window.tron || window.tronLink;
-        if (inj?.request) {
+      // 3. If TRON found but not connected (no address), request access
+      if (!nativeTW && injected) {
+        if (injected.request) {
           try {
-            await inj.request({ method: 'tron_requestAccounts' });
-            await new Promise(r => setTimeout(r, 1000));
+            await injected.request({ method: 'tron_requestAccounts' });
+            await new Promise(r => setTimeout(r, 1500));
             nativeTW = await pollForTronWeb(3000);
-          } catch (_) { }
+          } catch (e) {
+            console.warn('Request accounts failed:', e);
+          }
         }
       }
 
@@ -178,9 +182,9 @@ export default function SendPage() {
         }
       } else {
         if (isMobile) {
-          showNotif('Please open this site inside Trust Wallet.', 'error');
+          showNotif('TRON browser not found. Please open in Trust Wallet or TokenPocket.', 'error');
         } else {
-          showNotif('Please install TronLink extension.', 'error');
+          showNotif('Wallet not connected. Please unlock TronLink.', 'error');
         }
         setBtn({ text: 'Next', disabled: false });
       }
